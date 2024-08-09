@@ -1,14 +1,15 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls";
 import { Sky } from "three/addons/objects/Sky.js";
-import { Timer } from 'three/addons/misc/Timer.js';
+import { Timer } from "three/addons/misc/Timer.js";
 
 const renderer = new THREE.WebGLRenderer();
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
-  0.1, 100 
+  0.1,
+  100
 );
 const controls = new OrbitControls(camera, renderer.domElement);
 const timer = new Timer();
@@ -153,15 +154,15 @@ class Body {
     this.grabInvMass = 0.0;
     this.initPhysics();
     var geometry = new THREE.BufferGeometry();
-    var buffer=new THREE.BufferAttribute(this.pos, 3);
-    buffer.setUsage( THREE.StreamDrawUsage );
+    var buffer = new THREE.BufferAttribute(this.pos, 3);
+    buffer.setUsage(THREE.StreamDrawUsage);
     geometry.setAttribute("position", buffer);
     geometry.setIndex(tetMesh.tetSurfaceTriIds);
     var material = new THREE.MeshStandardMaterial({ color: 0xf020f0 });
-    
+
     material.flatShading = true;
     this.mesh = new THREE.Mesh(geometry, material);
-    this.mesh.castShadow=true;
+    this.mesh.castShadow = true;
     this.mesh.geometry.computeVertexNormals();
     this.mesh.userData = this;
     this.mesh.layers.enable(1);
@@ -232,14 +233,10 @@ class Body {
     }
   }
 
-  solveVolumes(dt)
-  {
+  solveVolumes(dt) {
     var alphadtSquared = 5 / (dt * dt);
 
-    for(var i=0; i<this.numTets; i++)
-    {
-
-    }
+    for (var i = 0; i < this.numTets; i++) {}
   }
 
   solve(dt) {
@@ -267,7 +264,7 @@ class Body {
     //solve constrains
     this.solveEdges(dt);
     this.solveVolumes(dt);
-    
+
     //update vel
     for (var i = 0; i < this.numParticles; i++) {
       if (this.invMass[i] == 0.0) continue;
@@ -296,7 +293,6 @@ function awake() {
 }
 
 function start() {
-
   const effectController = {
     turbidity: 0.1,
     rayleigh: 1,
@@ -304,55 +300,51 @@ function start() {
     mieDirectionalG: 0.7,
     elevation: 20,
     azimuth: 135,
-    exposure: renderer.toneMappingExposure
+    exposure: renderer.toneMappingExposure,
   };
-  
-          
+
   // Add Sky
   sky = new Sky();
-  sky.scale.setScalar( 4000 );
-  scene.add( sky );
+  sky.scale.setScalar(4000);
+  scene.add(sky);
   sun = new THREE.Vector3();
 
   const uniforms = sky.material.uniforms;
-  uniforms[ 'turbidity' ].value = effectController.turbidity;
-	uniforms[ 'rayleigh' ].value = effectController.rayleigh;
-  const phi = THREE.MathUtils.degToRad( 90 - effectController.elevation );
-  const theta = THREE.MathUtils.degToRad( effectController.azimuth );
-  sun.setFromSphericalCoords( 1, phi, theta );
-  uniforms[ 'sunPosition' ].value.copy( sun );
+  uniforms["turbidity"].value = effectController.turbidity;
+  uniforms["rayleigh"].value = effectController.rayleigh;
+  const phi = THREE.MathUtils.degToRad(90 - effectController.elevation);
+  const theta = THREE.MathUtils.degToRad(effectController.azimuth);
+  sun.setFromSphericalCoords(1, phi, theta);
+  uniforms["sunPosition"].value.copy(sun);
   renderer.toneMappingExposure = effectController.exposure;
 
-
   // Lights
-  // LIGHTS
-  // LIGHTS
-  const hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 2 );
-				hemiLight.color.setHSL( 0.6, 1, 0.6 );
-				hemiLight.groundColor.setHSL( 0.095, 1, 0.75 );
-				hemiLight.position.set( 0, 50, 0 );
-				scene.add( hemiLight );
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, 2);
+  hemiLight.color.setHSL(0.6, 1, 0.6);
+  hemiLight.groundColor.setHSL(0.095, 1, 0.75);
+  hemiLight.position.set(0, 50, 0);
+  scene.add(hemiLight);
 
-  const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
-  dirLight.color.setHSL( 0.1, 1, 0.95 );
+  const dirLight = new THREE.DirectionalLight(0xffffff, 3);
+  dirLight.color.setHSL(0.1, 1, 0.95);
   dirLight.position.setFromSphericalCoords(5, phi, theta);
-  dirLight.position.multiplyScalar( 30 );
-  scene.add( dirLight );
-  
-  //dirLight.castShadow = true;
+  dirLight.position.multiplyScalar(30);
+  scene.add(dirLight);
+
+  dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 2048;
   dirLight.shadow.mapSize.height = 2048;
 
   // GROUND
-  const groundGeo = new THREE.PlaneGeometry( 10000, 10000 );
-  const groundMat = new THREE.MeshStandardMaterial( { color: 0xffffff } );
-  groundMat.color.setHSL( 0.095, 1, 0.75 );
+  const groundGeo = new THREE.PlaneGeometry(100, 100);
+  const groundMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+  groundMat.color.setHSL(0.095, 1, 0.75);
 
-  const ground = new THREE.Mesh( groundGeo, groundMat );
+  const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.position.y = -0.0001;
-  ground.rotation.x = - Math.PI / 2;
+  ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
-  scene.add( ground );
+  scene.add(ground);
 
   var body = new Body(scene, bunnyMesh);
   mainObj = body;
@@ -372,9 +364,9 @@ function Update(dt) {
 
 function UpdateLoop(timestamp) {
   requestAnimationFrame(UpdateLoop);
-  timer.update( timestamp );
+  timer.update(timestamp);
   controls.update();
-  Update(1.0/60.0);
+  Update(1.0 / 60.0);
   renderer.render(scene, camera);
 }
 
