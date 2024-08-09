@@ -11,10 +11,10 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-const controls = new OrbitControls(camera, renderer.domElement);
+const camControls = new OrbitControls(camera, renderer.domElement);
 const timer = new Timer();
-
-var numSubsteps = 10;
+let pickingControls;
+let numSubsteps = 10;
 let mainObj;
 
 let sky, sun;
@@ -24,6 +24,10 @@ class Vector3 {
   constructor(verts, ith) {
     this.verts = verts;
     this.start = ith * 3;
+  }
+  getIndex()
+  {
+    return this.start/3;
   }
   getX() {
     return this.verts[this.start];
@@ -51,7 +55,7 @@ class Vector3 {
   }
 
   add(vec) {
-    var result = [0, 0, 0];
+    let result = [0, 0, 0];
     result[0] = this.verts[this.start] + vec.verts[vec.start];
     result[1] = this.verts[this.start + 1] + vec.verts[vec.start + 1];
     result[2] = this.verts[this.start + 2] + vec.verts[vec.start + 2];
@@ -59,7 +63,7 @@ class Vector3 {
   }
 
   sub(vec) {
-    var result = [0, 0, 0];
+    let result = [0, 0, 0];
     result[0] = this.verts[this.start] - vec.verts[vec.start];
     result[1] = this.verts[this.start + 1] - vec.verts[vec.start + 1];
     result[2] = this.verts[this.start + 2] - vec.verts[vec.start + 2];
@@ -67,7 +71,7 @@ class Vector3 {
   }
 
   mul(val) {
-    var result = [0, 0, 0];
+    let result = [0, 0, 0];
     result[0] = this.verts[this.start] * val;
     result[1] = this.verts[this.start + 1] * val;
     result[2] = this.verts[this.start + 2] * val;
@@ -101,7 +105,7 @@ class Vector3 {
   }
 
   cross(vec) {
-    var result = [0, 0, 0];
+    let result = [0, 0, 0];
     result[0] =
       this.verts[this.start + 1] * vec.verts[vec.start + 2] -
       this.verts[this.start + 2] * vec.verts[vec.start + 1];
@@ -131,7 +135,106 @@ class Vector3 {
   }
 }
 
-var gravity = new Vector3([0, -10, 0], 0);
+//for event 
+function onMouseDown(event)
+{
+  event.preventDefault();
+  pickingControls.onMouseDown(event);
+}
+
+function onMouseMove(event)
+{
+  event.preventDefault();
+  pickingControls.onMouseMove(event);
+}
+function onMouseUp(event)
+{
+  event.preventDefault();
+  pickingControls.onMouseUp(event);
+}
+
+class PickingControls {
+  constructor() {
+    this.raycaster = new THREE.Raycaster();
+		this.raycaster.layers.set(1);
+    this.raycaster.params.Line.threshold = 0.1;
+    this.isMouseDown = false;
+    this.selectedObject = null;
+    this.distance=0.0;
+    this.mousePos = new THREE.Vector2();
+    this.prevPos=new THREE.Vector2();
+    this.grabedPosition=null;
+    this.grabedMass=0.0;
+  }
+  onMouseDown(event) 
+  {
+    if(event.button!=0)
+      return;
+    this.isMouseDown = true;
+
+    this.updateRaycaster(event.clientX, event.clientY);
+    const intersects = this.raycaster.intersectObjects( scene.children );
+
+    if(intersects.length<1)
+      return;
+
+    let body = intersects[0].object.userData;
+    if(!body)
+      return;
+    
+    this.selectedObject=body;
+    this.distance = intersects[0].distance;
+    let pos = this.raycaster.ray.origin.clone();
+		pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+    this.prevPos=pos;
+    this.grabedPosition=this.selectedObject.getNearestPointReference(pos.x,pos.y, pos.z);
+    this.grabedMass=this.selectedObject.invMass[this.grabedPosition.getIndex()];
+    this.selectedObject.invMass[ this.grabedPosition.getIndex()]=0.0;
+
+    camControls.enabled = false;
+  }
+
+  onMouseMove(event) 
+  {
+    if(!this.isMouseDown)
+      return;
+    if(!this.selectedObject)
+      return;
+
+    this.updateRaycaster(event.clientX, event.clientY);
+    var pos = this.raycaster.ray.origin.clone();
+		pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+    
+    this.grabedPosition.set(new Vector3([pos.x,pos.y,pos.z], 0));
+
+  }
+
+  onMouseUp(event)
+  {
+    if(event.button!=0)
+        return;
+    this.isMouseDown=false;
+    if (this.selectedObject) {
+      camControls.enabled = true;
+      
+      this.selectedObject.invMass[ this.grabedPosition.getIndex()]=this.grabedMass;
+      this.grabedMass=0.0;
+      this.selectedObject=null;
+    }
+  }
+
+  updateRaycaster(x, y)
+  {
+    //https://threejs.org/docs/#api/en/core/Raycaster
+    var rect = renderer.domElement.getBoundingClientRect();
+    this.mousePos.x = ((x - rect.left) /  window.innerWidth ) * 2 - 1;
+		this.mousePos.y = -((y - rect.top) / window.innerHeight ) * 2 + 1;
+    this.raycaster.setFromCamera( this.mousePos, camera );
+  }
+}
+
+const gravity = new Vector3([0, -10, 0], 0);
+
 
 class Body {
   constructor(scene, tetMesh) {
@@ -149,36 +252,58 @@ class Body {
 
     //this.edgeCompliance = edgeCompliance;
     //this.volCompliance = volCompliance;
-
-    this.grabId = -1;
     this.grabInvMass = 0.0;
     this.initPhysics();
-    var geometry = new THREE.BufferGeometry();
-    var buffer = new THREE.BufferAttribute(this.pos, 3);
+    let geometry = new THREE.BufferGeometry();
+    let buffer = new THREE.BufferAttribute(this.pos, 3);
     buffer.setUsage(THREE.StreamDrawUsage);
     geometry.setAttribute("position", buffer);
     geometry.setIndex(tetMesh.tetSurfaceTriIds);
-    var material = new THREE.MeshStandardMaterial({ color: 0xf020f0 });
+    let material = new THREE.MeshStandardMaterial({ color: 0x0fffff });
 
     material.flatShading = true;
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.castShadow = true;
     this.mesh.geometry.computeVertexNormals();
+    
+    //for laycast
     this.mesh.userData = this;
     this.mesh.layers.enable(1);
     scene.add(this.mesh);
   }
 
-  getTetVolume(nr) {
-    var a = new Vector3(this.pos, this.tetIds[4 * nr]);
-    var b = new Vector3(this.pos, this.tetIds[4 * nr + 1]);
-    var c = new Vector3(this.pos, this.tetIds[4 * nr + 2]);
-    var d = new Vector3(this.pos, this.tetIds[4 * nr + 3]);
+  getNearestPointReference(x,y,z)
+  {
+    let toCompare=new Vector3([x,y,z],0);
 
-    var ab = b.sub(a);
-    var ac = c.sub(a);
-    var ad = d.sub(a);
-    var volume = ab.cross(ac).dot(ad); //scalar triple product
+    let PosFound=null;
+    let minDistSquared=Number.MAX_VALUE;
+    let minDistIndex=-1;  
+    for (let i = 0; i < this.numParticles; i++) {
+      let pos=new Vector3(this.pos, i);
+      let distSquared=toCompare.sub(pos).squareLen();
+      if (distSquared < minDistSquared) {
+        minDistSquared = distSquared;
+        minDistIndex = i;
+      }
+    }
+    if(minDistIndex>=0)
+    {
+      PosFound=new Vector3(this.pos, minDistIndex);
+    }
+    return PosFound;
+  }
+
+  getTetVolume(ith) {
+    let a = new Vector3(this.pos, this.tetIds[4 * ith]);
+    let b = new Vector3(this.pos, this.tetIds[4 * ith + 1]);
+    let c = new Vector3(this.pos, this.tetIds[4 * ith + 2]);
+    let d = new Vector3(this.pos, this.tetIds[4 * ith + 3]);
+
+    let ab = b.sub(a);
+    let ac = c.sub(a);
+    let ad = d.sub(a);
+    let volume = ab.cross(ac).dot(ad); //scalar triple product
     return volume / 6.0; //since tet div 6
   }
 
@@ -186,47 +311,47 @@ class Body {
     this.invMass.fill(0.0);
     this.restVol.fill(0.0);
 
-    for (var i = 0; i < this.numTets; i++) {
-      var vol = this.getTetVolume(i);
+    for (let i = 0; i < this.numTets; i++) {
+      let vol = this.getTetVolume(i);
       this.restVol[i] = vol;
-      var pInvMass = vol > 0.0 ? 1.0 / (vol / 4.0) : 0.0;
+      let pInvMass = vol > 0.0 ? 1.0 / (vol / 4.0) : 0.0;
       this.invMass[this.tetIds[4 * i]] += pInvMass;
       this.invMass[this.tetIds[4 * i + 1]] += pInvMass;
       this.invMass[this.tetIds[4 * i + 2]] += pInvMass;
       this.invMass[this.tetIds[4 * i + 3]] += pInvMass;
     }
-    for (var i = 0; i < this.edgeLengths.length; i++) {
-      var leftPos = new Vector3(this.pos, this.edgeIds[2 * i]);
-      var rightPos = new Vector3(this.pos, this.edgeIds[2 * i + 1]);
+    for (let i = 0; i < this.edgeLengths.length; i++) {
+      let leftPos = new Vector3(this.pos, this.edgeIds[2 * i]);
+      let rightPos = new Vector3(this.pos, this.edgeIds[2 * i + 1]);
       this.edgeLengths[i] = rightPos.sub(leftPos).len();
     }
   }
 
   solveEdges(dt) {
-    var alphadtSquared = 100 / (dt * dt);
+    let alphadtSquared = 100 / (dt * dt);
 
-    for (var i = 0; i < this.edgeLengths.length; i++) {
-      var wL = this.invMass[this.edgeIds[2 * i]];
-      var wR = this.invMass[this.edgeIds[2 * i + 1]];
-      var w = wL + wR;
+    for (let i = 0; i < this.edgeLengths.length; i++) {
+      let wL = this.invMass[this.edgeIds[2 * i]];
+      let wR = this.invMass[this.edgeIds[2 * i + 1]];
+      let w = wL + wR;
       if (w == 0.0) continue;
 
-      var leftPos = new Vector3(this.pos, this.edgeIds[2 * i]);
-      var rightPos = new Vector3(this.pos, this.edgeIds[2 * i + 1]);
-      var currentLen = rightPos.sub(leftPos).len();
+      let leftPos = new Vector3(this.pos, this.edgeIds[2 * i]);
+      let rightPos = new Vector3(this.pos, this.edgeIds[2 * i + 1]);
+      let currentLen = rightPos.sub(leftPos).len();
 
       if (currentLen == 0.0) continue;
 
-      var errorOfConstrain = currentLen - this.edgeLengths[i];
+      let errorOfConstrain = currentLen - this.edgeLengths[i];
 
-      var grad = leftPos.sub(rightPos);
-      var gradLeft = grad.mul(1.0 / currentLen);
-      var gradRight = grad.mul(-1.0 / currentLen);
+      let grad = leftPos.sub(rightPos);
+      let gradLeft = grad.mul(1.0 / currentLen);
+      let gradRight = grad.mul(-1.0 / currentLen);
 
-      var denominator = w + alphadtSquared;
-      var lambda = -errorOfConstrain / denominator;
-      var delPosLeft = gradLeft.mul(lambda * wL);
-      var delPosRight = gradRight.mul(lambda * wR);
+      let denominator = w + alphadtSquared;
+      let lambda = -errorOfConstrain / denominator;
+      let delPosLeft = gradLeft.mul(lambda * wL);
+      let delPosRight = gradRight.mul(lambda * wR);
 
       leftPos.addSet(delPosLeft);
       rightPos.addSet(delPosRight);
@@ -234,49 +359,51 @@ class Body {
   }
 
   solveVolumes(dt) {
-    var alphadtSquared = 0 / (dt * dt);
+    let alphadtSquared = 0 / (dt * dt);
 
     //c=v-v0
     //delC is cross products
-    for (var i = 0; i < this.numTets; i++) 
-    {
-      let grads=[];
-      var denominator=0.0;
-      for(let [top, triangles] of [[1,3,2], [0,2,3], [0,3,1], [0,1,2]].entries())
-      {
-        let a=new Vector3(this.pos, this.tetIds[4 * i + triangles[0]]);
-        let b=new Vector3(this.pos, this.tetIds[4 * i + triangles[1]]);
-        let c=new Vector3(this.pos, this.tetIds[4 * i + triangles[2]]);
-        let ab=b.sub(a);
-        let ac=c.sub(a);
-        grads.push(ab.cross(ac).mul(1.0/6.0));
-        denominator+=this.invMass[this.tetIds[4 * i + top]]*grads[top].squareLen();
+    for (let i = 0; i < this.numTets; i++) {
+      let grads = [];
+      let denominator = 0.0;
+      for (let [top, triangles] of [
+        [1, 3, 2],
+        [0, 2, 3],
+        [0, 3, 1],
+        [0, 1, 2],
+      ].entries()) {
+        let a = new Vector3(this.pos, this.tetIds[4 * i + triangles[0]]);
+        let b = new Vector3(this.pos, this.tetIds[4 * i + triangles[1]]);
+        let c = new Vector3(this.pos, this.tetIds[4 * i + triangles[2]]);
+        let ab = b.sub(a);
+        let ac = c.sub(a);
+        grads.push(ab.cross(ac).mul(1.0 / 6.0));
+        denominator +=
+          this.invMass[this.tetIds[4 * i + top]] * grads[top].squareLen();
       }
 
-      if(denominator==0.0)
-        continue;
-      denominator+=alphadtSquared;
+      if (denominator == 0.0) continue;
+      denominator += alphadtSquared;
 
-      let currentVolume=this.getTetVolume(i);
+      let currentVolume = this.getTetVolume(i);
 
-      let errorOfConstrain=currentVolume-this.restVol[i];
+      let errorOfConstrain = currentVolume - this.restVol[i];
 
-      var lambda = -errorOfConstrain / denominator;
+      let lambda = -errorOfConstrain / denominator;
 
-      for(let [j, grad] of grads.entries())
-      {
-        var pos=new Vector3(this.pos, this.tetIds[4 * i + j]);
-        pos.addSet(grad.mul(lambda*this.invMass[this.tetIds[4 * i + j]]));
+      for (let [j, grad] of grads.entries()) {
+        let pos = new Vector3(this.pos, this.tetIds[4 * i + j]);
+        pos.addSet(grad.mul(lambda * this.invMass[this.tetIds[4 * i + j]]));
       }
     }
   }
 
   solve(dt) {
-    for (var i = 0; i < this.numParticles; i++) {
+    for (let i = 0; i < this.numParticles; i++) {
       if (this.invMass[i] == 0.0) continue;
-      var vel = new Vector3(this.vel, i);
-      var prevPos = new Vector3(this.prevPos, i);
-      var currentPos = new Vector3(this.pos, i);
+      let vel = new Vector3(this.vel, i);
+      let prevPos = new Vector3(this.prevPos, i);
+      let currentPos = new Vector3(this.pos, i);
 
       //vel+=grav*dt
       vel.addSet(gravity.mul(dt));
@@ -286,7 +413,7 @@ class Body {
       currentPos.addSet(vel.mul(dt));
 
       //ground
-      var y = currentPos.getY();
+      let y = currentPos.getY();
       if (y < 0.0) {
         currentPos.set(prevPos);
         currentPos.setY(0.0);
@@ -298,12 +425,12 @@ class Body {
     this.solveVolumes(dt);
 
     //update vel
-    for (var i = 0; i < this.numParticles; i++) {
+    for (let i = 0; i < this.numParticles; i++) {
       if (this.invMass[i] == 0.0) continue;
-      var vel = new Vector3(this.vel, i);
-      var prevPos = new Vector3(this.prevPos, i);
-      var currentPos = new Vector3(this.pos, i);
-      var diff = currentPos.sub(prevPos);
+      let vel = new Vector3(this.vel, i);
+      let prevPos = new Vector3(this.prevPos, i);
+      let currentPos = new Vector3(this.pos, i);
+      let diff = currentPos.sub(prevPos);
       vel.set(diff.mul(1.0 / dt));
     }
 
@@ -313,6 +440,7 @@ class Body {
   }
 }
 
+
 function awake() {
   window.addEventListener("resize", onWindowResize, false);
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -321,7 +449,11 @@ function awake() {
   renderer.toneMappingExposure = 0.5;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  document.body.appendChild(renderer.domElement);
+  renderWindow.appendChild(renderer.domElement);
+  pickingControls= new PickingControls();
+  renderWindow.addEventListener( 'pointerdown', onMouseDown, false );
+  renderWindow.addEventListener( 'pointermove', onMouseMove, false );
+  renderWindow.addEventListener( 'pointerup', onMouseUp, false );
 }
 
 function start() {
@@ -378,18 +510,18 @@ function start() {
   ground.receiveShadow = true;
   scene.add(ground);
 
-  var body = new Body(scene, bunnyMesh);
+  let body = new Body(scene, bunnyMesh);
   mainObj = body;
 
   camera.position.z = 2;
   camera.position.y = 2;
   camera.position.x = 2;
-  controls.update();
+  camControls.update();
 }
 
 function Update(dt) {
-  var sdt = dt / numSubsteps;
-  for (var step = 0; step < numSubsteps; step++) {
+  let sdt = dt / numSubsteps;
+  for (let step = 0; step < numSubsteps; step++) {
     mainObj.solve(sdt);
   }
 }
@@ -397,7 +529,7 @@ function Update(dt) {
 function UpdateLoop(timestamp) {
   requestAnimationFrame(UpdateLoop);
   timer.update(timestamp);
-  controls.update();
+  camControls.update();
   Update(1.0 / 60.0);
   renderer.render(scene, camera);
 }
@@ -408,7 +540,7 @@ function main() {
   UpdateLoop();
 }
 
-var bunnyMesh = {
+let bunnyMesh = {
   name: "bunnyTets",
   verts: [
     0.1667, 0.032, 0.0191, 0.1474, 0.0432, 0.1918, 0.2237, 0.0267, 0.1427,
