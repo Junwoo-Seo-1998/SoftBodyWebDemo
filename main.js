@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { Timer } from "three/addons/misc/Timer.js";
 
@@ -25,9 +25,8 @@ class Vector3 {
     this.verts = verts;
     this.start = ith * 3;
   }
-  getIndex()
-  {
-    return this.start/3;
+  getIndex() {
+    return this.start / 3;
   }
   getX() {
     return this.verts[this.start];
@@ -135,20 +134,17 @@ class Vector3 {
   }
 }
 
-//for event 
-function onMouseDown(event)
-{
+//for event
+function onMouseDown(event) {
   event.preventDefault();
   pickingControls.onMouseDown(event);
 }
 
-function onMouseMove(event)
-{
+function onMouseMove(event) {
   event.preventDefault();
   pickingControls.onMouseMove(event);
 }
-function onMouseUp(event)
-{
+function onMouseUp(event) {
   event.preventDefault();
   pickingControls.onMouseUp(event);
 }
@@ -156,85 +152,79 @@ function onMouseUp(event)
 class PickingControls {
   constructor() {
     this.raycaster = new THREE.Raycaster();
-		this.raycaster.layers.set(1);
+    this.raycaster.layers.set(1);
     this.raycaster.params.Line.threshold = 0.1;
     this.isMouseDown = false;
     this.selectedObject = null;
-    this.distance=0.0;
+    this.distance = 0.0;
     this.mousePos = new THREE.Vector2();
-    this.prevPos=new THREE.Vector2();
-    this.grabedPosition=null;
-    this.grabedMass=0.0;
+    this.prevPos = new THREE.Vector2();
+    this.grabedPosition = null;
+    this.grabedMass = 0.0;
   }
-  onMouseDown(event) 
-  {
-    if(event.button!=0)
-      return;
+  onMouseDown(event) {
+    if (event.button != 0) return;
     this.isMouseDown = true;
 
     this.updateRaycaster(event.clientX, event.clientY);
-    const intersects = this.raycaster.intersectObjects( scene.children );
+    const intersects = this.raycaster.intersectObjects(scene.children);
 
-    if(intersects.length<1)
-      return;
+    if (intersects.length < 1) return;
 
     let body = intersects[0].object.userData;
-    if(!body)
-      return;
-    
-    this.selectedObject=body;
+    if (!body) return;
+
+    this.selectedObject = body;
     this.distance = intersects[0].distance;
     let pos = this.raycaster.ray.origin.clone();
-		pos.addScaledVector(this.raycaster.ray.direction, this.distance);
-    this.prevPos=pos;
-    this.grabedPosition=this.selectedObject.getNearestPointReference(pos.x,pos.y, pos.z);
-    this.grabedMass=this.selectedObject.invMass[this.grabedPosition.getIndex()];
-    this.selectedObject.invMass[ this.grabedPosition.getIndex()]=0.0;
+    pos.addScaledVector(this.raycaster.ray.direction, this.distance);
+    this.prevPos = pos;
+    this.grabedPosition = this.selectedObject.getNearestPointReference(
+      pos.x,
+      pos.y,
+      pos.z
+    );
+    this.grabedMass =
+      this.selectedObject.invMass[this.grabedPosition.getIndex()];
+    this.selectedObject.invMass[this.grabedPosition.getIndex()] = 0.0;
 
     camControls.enabled = false;
   }
 
-  onMouseMove(event) 
-  {
-    if(!this.isMouseDown)
-      return;
-    if(!this.selectedObject)
-      return;
+  onMouseMove(event) {
+    if (!this.isMouseDown) return;
+    if (!this.selectedObject) return;
 
     this.updateRaycaster(event.clientX, event.clientY);
     var pos = this.raycaster.ray.origin.clone();
-		pos.addScaledVector(this.raycaster.ray.direction, this.distance);
-    
-    this.grabedPosition.set(new Vector3([pos.x,pos.y,pos.z], 0));
+    pos.addScaledVector(this.raycaster.ray.direction, this.distance);
 
+    this.grabedPosition.set(new Vector3([pos.x, pos.y, pos.z], 0));
   }
 
-  onMouseUp(event)
-  {
-    if(event.button!=0)
-        return;
-    this.isMouseDown=false;
+  onMouseUp(event) {
+    if (event.button != 0) return;
+    this.isMouseDown = false;
     if (this.selectedObject) {
       camControls.enabled = true;
-      
-      this.selectedObject.invMass[ this.grabedPosition.getIndex()]=this.grabedMass;
-      this.grabedMass=0.0;
-      this.selectedObject=null;
+
+      this.selectedObject.invMass[this.grabedPosition.getIndex()] =
+        this.grabedMass;
+      this.grabedMass = 0.0;
+      this.selectedObject = null;
     }
   }
 
-  updateRaycaster(x, y)
-  {
+  updateRaycaster(x, y) {
     //https://threejs.org/docs/#api/en/core/Raycaster
     var rect = renderer.domElement.getBoundingClientRect();
-    this.mousePos.x = ((x - rect.left) /  window.innerWidth ) * 2 - 1;
-		this.mousePos.y = -((y - rect.top) / window.innerHeight ) * 2 + 1;
-    this.raycaster.setFromCamera( this.mousePos, camera );
+    this.mousePos.x = ((x - rect.left) / window.innerWidth) * 2 - 1;
+    this.mousePos.y = -((y - rect.top) / window.innerHeight) * 2 + 1;
+    this.raycaster.setFromCamera(this.mousePos, camera);
   }
 }
 
 const gravity = new Vector3([0, -10, 0], 0);
-
 
 class Body {
   constructor(scene, tetMesh) {
@@ -265,31 +255,29 @@ class Body {
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.castShadow = true;
     this.mesh.geometry.computeVertexNormals();
-    
+
     //for laycast
     this.mesh.userData = this;
     this.mesh.layers.enable(1);
     scene.add(this.mesh);
   }
 
-  getNearestPointReference(x,y,z)
-  {
-    let toCompare=new Vector3([x,y,z],0);
+  getNearestPointReference(x, y, z) {
+    let toCompare = new Vector3([x, y, z], 0);
 
-    let PosFound=null;
-    let minDistSquared=Number.MAX_VALUE;
-    let minDistIndex=-1;  
+    let PosFound = null;
+    let minDistSquared = Number.MAX_VALUE;
+    let minDistIndex = -1;
     for (let i = 0; i < this.numParticles; i++) {
-      let pos=new Vector3(this.pos, i);
-      let distSquared=toCompare.sub(pos).squareLen();
+      let pos = new Vector3(this.pos, i);
+      let distSquared = toCompare.sub(pos).squareLen();
       if (distSquared < minDistSquared) {
         minDistSquared = distSquared;
         minDistIndex = i;
       }
     }
-    if(minDistIndex>=0)
-    {
-      PosFound=new Vector3(this.pos, minDistIndex);
+    if (minDistIndex >= 0) {
+      PosFound = new Vector3(this.pos, minDistIndex);
     }
     return PosFound;
   }
@@ -440,7 +428,6 @@ class Body {
   }
 }
 
-
 function awake() {
   window.addEventListener("resize", onWindowResize, false);
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -450,10 +437,10 @@ function awake() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderWindow.appendChild(renderer.domElement);
-  pickingControls= new PickingControls();
-  renderWindow.addEventListener( 'pointerdown', onMouseDown, false );
-  renderWindow.addEventListener( 'pointermove', onMouseMove, false );
-  renderWindow.addEventListener( 'pointerup', onMouseUp, false );
+  pickingControls = new PickingControls();
+  renderWindow.addEventListener("pointerdown", onMouseDown, false);
+  renderWindow.addEventListener("pointermove", onMouseMove, false);
+  renderWindow.addEventListener("pointerup", onMouseUp, false);
 }
 
 function start() {
