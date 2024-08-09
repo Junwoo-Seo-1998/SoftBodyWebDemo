@@ -223,8 +223,8 @@ class Body {
       var gradLeft = grad.mul(1.0 / currentLen);
       var gradRight = grad.mul(-1.0 / currentLen);
 
-      var buttom = w + alphadtSquared;
-      var lambda = -errorOfConstrain / buttom;
+      var denominator = w + alphadtSquared;
+      var lambda = -errorOfConstrain / denominator;
       var delPosLeft = gradLeft.mul(lambda * wL);
       var delPosRight = gradRight.mul(lambda * wR);
 
@@ -234,9 +234,41 @@ class Body {
   }
 
   solveVolumes(dt) {
-    var alphadtSquared = 5 / (dt * dt);
+    var alphadtSquared = 0 / (dt * dt);
 
-    for (var i = 0; i < this.numTets; i++) {}
+    //c=v-v0
+    //delC is cross products
+    for (var i = 0; i < this.numTets; i++) 
+    {
+      let grads=[];
+      var denominator=0.0;
+      for(let [top, triangles] of [[1,3,2], [0,2,3], [0,3,1], [0,1,2]].entries())
+      {
+        let a=new Vector3(this.pos, this.tetIds[4 * i + triangles[0]]);
+        let b=new Vector3(this.pos, this.tetIds[4 * i + triangles[1]]);
+        let c=new Vector3(this.pos, this.tetIds[4 * i + triangles[2]]);
+        let ab=b.sub(a);
+        let ac=c.sub(a);
+        grads.push(ab.cross(ac).mul(1.0/6.0));
+        denominator+=this.invMass[this.tetIds[4 * i + top]]*grads[top].squareLen();
+      }
+
+      if(denominator==0.0)
+        continue;
+      denominator+=alphadtSquared;
+
+      let currentVolume=this.getTetVolume(i);
+
+      let errorOfConstrain=currentVolume-this.restVol[i];
+
+      var lambda = -errorOfConstrain / denominator;
+
+      for(let [j, grad] of grads.entries())
+      {
+        var pos=new Vector3(this.pos, this.tetIds[4 * i + j]);
+        pos.addSet(grad.mul(lambda*this.invMass[this.tetIds[4 * i + j]]));
+      }
+    }
   }
 
   solve(dt) {
