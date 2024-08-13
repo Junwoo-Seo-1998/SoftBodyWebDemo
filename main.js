@@ -3,7 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Sky } from "three/addons/objects/Sky.js";
 import { Timer } from "three/addons/misc/Timer.js";
 
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -239,9 +239,6 @@ class Body {
     this.restVol = new Float32Array(this.numTets);
     this.edgeLengths = new Float32Array(this.edgeIds.length / 2);
     this.invMass = new Float32Array(this.numParticles);
-
-    //this.edgeCompliance = edgeCompliance;
-    //this.volCompliance = volCompliance;
     this.grabInvMass = 0.0;
     this.initPhysics();
     let geometry = new THREE.BufferGeometry();
@@ -249,9 +246,11 @@ class Body {
     buffer.setUsage(THREE.StreamDrawUsage);
     geometry.setAttribute("position", buffer);
     geometry.setIndex(tetMesh.tetSurfaceTriIds);
-    let material = new THREE.MeshStandardMaterial({ color: 0x0fffff });
+    let material = new THREE.MeshPhysicalMaterial({color: 0xc9ffa1,  sample: 10, resolution:2048, roughness: 0.0, 
+      transmission: 1.0, thickness: 3.5, clearcoat: 1.0, attenuationDistance: 0.5, attenuationColor: 0xffffff, temporalDistortion: 0.5,
+      distortionScale: 0.2, distortion: 0.01, chromaticAberration: 0.06, ior: 1.5, anisotropy: 0.0});
 
-    material.flatShading = true;
+    material.flatShading = false;
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.castShadow = true;
     this.mesh.geometry.computeVertexNormals();
@@ -528,7 +527,7 @@ function main() {
 }
 
 let bunnyMesh = {
-  name: "bunnyTets",
+  name: "bunny",
   verts: [
     0.1667, 0.032, 0.0191, 0.1474, 0.0432, 0.1918, 0.2237, 0.0267, 0.1427,
     -0.0349, 0.0627, 0.1842, -0.1422, 0.0246, 0.1666, -0.1443, 0.0308, 0.2591,
