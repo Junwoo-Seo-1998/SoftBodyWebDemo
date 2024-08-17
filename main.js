@@ -19,6 +19,18 @@ let mainObj;
 
 let sky, sun;
 
+let play = false;
+
+function onPlayStop() {
+  play = !play;
+  if (play) document.getElementById("play").innerText = "Stop";
+  else document.getElementById("play").innerText = "Play";
+}
+
+function onRestart() {
+  location.reload();
+}
+
 //helper class for vector math
 class Vector3 {
   constructor(verts, ith) {
@@ -174,6 +186,9 @@ class PickingControls {
     let body = intersects[0].object.userData;
     if (!body) return;
 
+    //if it is valid obj then make it play
+    if (!play) onPlayStop();
+
     this.selectedObject = body;
     this.distance = intersects[0].distance;
     let pos = this.raycaster.ray.origin.clone();
@@ -246,9 +261,23 @@ class Body {
     buffer.setUsage(THREE.StreamDrawUsage);
     geometry.setAttribute("position", buffer);
     geometry.setIndex(tetMesh.tetSurfaceTriIds);
-    let material = new THREE.MeshPhysicalMaterial({color: 0xc9ffa1,  sample: 10, resolution:2048, roughness: 0.0, 
-      transmission: 1.0, thickness: 3.5, clearcoat: 1.0, attenuationDistance: 0.5, attenuationColor: 0xffffff, temporalDistortion: 0.5,
-      distortionScale: 0.2, distortion: 0.01, chromaticAberration: 0.06, ior: 1.5, anisotropy: 0.0});
+    let material = new THREE.MeshPhysicalMaterial({
+      color: 0xc9ffa1,
+      sample: 10,
+      resolution: 2048,
+      roughness: 0.0,
+      transmission: 1.0,
+      thickness: 3.5,
+      clearcoat: 1.0,
+      attenuationDistance: 0.5,
+      attenuationColor: 0xffffff,
+      temporalDistortion: 0.5,
+      distortionScale: 0.2,
+      distortion: 0.01,
+      chromaticAberration: 0.06,
+      ior: 1.5,
+      anisotropy: 0.0,
+    });
 
     material.flatShading = false;
     this.mesh = new THREE.Mesh(geometry, material);
@@ -440,6 +469,9 @@ function awake() {
   renderWindow.addEventListener("pointerdown", onMouseDown, false);
   renderWindow.addEventListener("pointermove", onMouseMove, false);
   renderWindow.addEventListener("pointerup", onMouseUp, false);
+
+  document.getElementById("play").addEventListener("click", onPlayStop);
+  document.getElementById("restart").addEventListener("click", onRestart);
 }
 
 function start() {
@@ -506,6 +538,8 @@ function start() {
 }
 
 function Update(dt) {
+  if (!play) return;
+
   let sdt = dt / numSubsteps;
   for (let step = 0; step < numSubsteps; step++) {
     mainObj.solve(sdt);
